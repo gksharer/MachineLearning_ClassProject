@@ -1,5 +1,5 @@
----
-title: "Machine Learning Class Project"
+--
+title: "Exercise Style Classification : Machine Learning Class Project"
 author: "Gillian Sharer"
 date: "February 28, 2016"
 output: html_document
