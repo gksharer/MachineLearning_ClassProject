@@ -1,0 +1,79 @@
+--
+title: "Exercise Style Classification : Machine Learning Class Project"
+author: "Gillian Sharer"
+date: "February 28, 2016"
+output: html_document
+---
+
+
+```{r, echo=FALSE, message=FALSE}
+library(ggplot2)
+library(dplyr)
+library(randomForest)
+
+```
+##Introduction and Summary
+
+The goal of this project is to create a model using machine learning techniques that will predict how well an exercise is performed given data from accelerometers. The data set used is the HAR (Human Activity Recognition) Dataset described in this paper:
+
+  Ugulino, W.; Cardador, D.; Vega, K.; Velloso, E.; Milidiu, R.; Fuks, H. Wearable Computing: Accelerometers' Data Classification of Body Postures and Movements. Proceedings of 21st Brazilian Symposium on Artificial Intelligence. Advances in Artificial Intelligence - SBIA 2012. In: Lecture Notes in Computer Science. , pp. 52-61. 
+
+This dataset consists of 37 measurement types from each of 4 accelerometers worn by 6 people, for a total of 19622 observations in the subset used for training. The accelerometers are attached to the persons arm, forearm, and belt and to the dumbbell. The outcomes of interest are the classe variables which are 5 factors describing the exercise technique used:
+
+  A=exercise done correctly <br>
+  B=elbows thrown to front <br>
+  C=lifting dumbell halfway <br>
+  D=lowering dumbbell halfway <br>
+  E=hips thrown to front <br> 
+  
+While there are 160 variables in the dataset, you can make a good model using very few of these. A random forest model built using just 8 predictors can fit the training dataset with an error rate of 1% (discussed below).
+
+##Data Exploration, Cleaning, and Processing
+
+Looking through the raw dataset, there are 160 variables, not all of which can be considered for use as predictors. The test set has no derived variables (average, min, max, stddev, amplitude, variance, skewness, kurtosis), so these cannot be used. Users Eurico and Jeremy have no timestamp variable entries. The dataset cannot be treated as a timeseries and the index numbers are ordered by user. Likewise, the outcomes are well distributed across users. These also cannot be used as predictors. This leaves 52 variables that are potential predictors in the model.
+
+```{r, cache=TRUE}
+data <- read.csv("http://d396qusza40orc.cloudfront.net/predmachlearn/pml-training.csv", na.strings=c("NA", "#DIV/0!","NaN"))
+```
+
+The table below shows that the outcomes (A,B,C,D,E) are fairly evenly distributed across users:
+
+```{r, echo=FALSE}
+table(data$user_name,data$classe)
+```
+```{r, cache=TRUE}
+data <- select(data,-matches("(kurtosis|skewness|amplitude|var|avg|max|min|stddev)"),-new_window, -X, -num_window, -raw_timestamp_part_1, -raw_timestamp_part_2, -cvtd_timestamp, -user_name) 
+```
+
+##Random Forest Cross Validatation and Model Fit
+
+Why use decision trees and random forest? Trees are useful for classification problems, such as the one presented in this homework. Random forest uses bootstrapping with replacement methods to build a large number of tree models from the data set. It then votes using these model results to build a "best" model. This cross validation method results in a better model than a single tree method. I use the R package "randomForest", which implements the algorithm of Breiman, L. (2001), Random Forests, Machine Learning 45(1), 5-32.
+
+My initial model uses all 52 variables in the dataset. While this may lead to overfitting of noise created by variables that are not relevant to the problem, it also provides information useful for determining which variables are in fact important. As seen in the output of the randomForest model fit below, the out-of-bag  (OOB) error rate of this model on the trial dataset is 0.28% and 55/19622 observations are miscategorized.
+
+```{r, cache=TRUE}
+set.seed(71)
+modelFit.rf <- randomForest(classe ~ . , data=data)
+modelFit.rf 
+```
+
+The following plot is a measure of the decrease in Gini impurity, a probability based measurement of classification goodness, with the addition of each variable in the model. The most important variables are at the top of the plot, and the least important are at the bottom. This is not an absolute ranking; highly correlated variables may present with one as very important and the other as not important (perfectly correlated variables are interchangeable - you only need one, but either one will work). However, the ranking can be useful for feature selection. The goal of feature selection is to exclude variables that are unneccesary to the model to avoid overfitting noise. This is important because overfitting noise in the trial dataset can lead to decreased performance of the model when applied to the test dataset.
+
+
+```{r, figwidth=4,fig.height=9}
+varImpPlot(modelFit.rf,n.var=52)
+```
+
+
+After several attempts at excluding different sets of variables, I decided to use the top 8 predictors: roll\_belt, yaw\_belt, pitch\_forearm, magnet\_dumbbell\_z, pitch\_belt, magnet\_dumbbell\_y,roll\_forearm, magnet\_dumbbell\_x. As seen in the model fit result below, this new model has only a slightly higher error rate of 1%, while greatly simplifying the model construction and retaining the variables that most affect the outcome.
+
+```{r, echo=TRUE, cache=TRUE}
+set.seed(74)
+dataFinal <- select(data, roll_belt, yaw_belt,pitch_forearm,magnet_dumbbell_z, pitch_belt,magnet_dumbbell_y,roll_forearm,magnet_dumbbell_x,classe)
+FinalModelFit.rf <- randomForest(classe ~ . , data=dataFinal)
+FinalModelFit.rf
+```
+
+##Discussion and Conclusions
+
+Machine learning techniques such as random forests are powerful tools to predict outcomes. The final model constructed in this work correctly classified 19426/19622 observations in the trial dataset with a success rate of 99% (mistfit error 1%). The last step needed is to run the model against the test dataset to see if the model retains its accuracy when applied to new data.
